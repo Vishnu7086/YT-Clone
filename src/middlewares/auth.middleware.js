@@ -1,4 +1,4 @@
-import { User } from "../models/user.models.js";
+import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken"
@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken"
 
 // dotenv.config();
 
-export const verifyJWT = asyncHandler(async(req, _, next) => {
+export const verifyJWT = asyncHandler(async(req, res, next) => {
     try {
         const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")
     
