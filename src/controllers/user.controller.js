@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import mongoose from 'mongoose';
 import jwt from "jsonwebtoken"
@@ -80,7 +80,7 @@ const registerUser = asyncHandler( async (req, res) => {
         fullname,
         password,
         avatar: avatar.url,
-        coverImage: coverImage?.url || "",
+        coverImage: coverImage?.url || undefined,
     })
     
     // remove passward and refresh token field from response
@@ -167,11 +167,11 @@ const logoutUser = asyncHandler(async(req, res) => {
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set: {
-                // refreshToken: ""
+            $unset: {
+                refreshToken: 1,
                 // refreshToken: null
                 // refreshToken: undefined
-                refreshToken: 1 //this removes the field from document
+                // refreshToken: 1 //this removes the field from document
             }
         },
         {
@@ -316,6 +316,8 @@ const updateAcountDetails = asyncHandler( async (req, res) => {
 })
 
 const updateUserAvatar = asyncHandler( async (req, res) => {
+    const previousAvatarUrl = await req.user.avatar
+
     const avatarLocalPath = req.file?.path
 
     if (!avatarLocalPath) {
@@ -337,13 +339,21 @@ const updateUserAvatar = asyncHandler( async (req, res) => {
         },
         {new: true}
     ).select("-password -refreshToken")
+    
+    const previousAvatarPublicId = previousAvatarUrl ? previousAvatarUrl.split('/').pop().split('.')[0] : null;
+
+    if (previousAvatarPublicId) {
+        await deleteFromCloudinary(previousAvatarPublicId)
+    }
 
     return res
     .status(200)
-    .json( new ApiResponse(200, user,"avatar is updated"))
+    .json( new ApiResponse(200, user, "Avatar is Updated"))
 })
 
 const updateUserCoverImage = asyncHandler( async (req, res) => {
+    const previousCoverImageUrl = await req.user.coverImage
+
     const coverImageLocalPath = req.file?.path
 
     if (!coverImageLocalPath) {
@@ -365,6 +375,12 @@ const updateUserCoverImage = asyncHandler( async (req, res) => {
         },
         {new: true}
     ).select("-password -refreshToken")
+        
+    const previousCoverImagePublicId = previousCoverImageUrl ? previousCoverImageUrl.split('/').pop().split('.')[0] : null;
+
+    if (previousCoverImagePublicId) {
+        await deleteFromCloudinary(previousCoverImagePublicId)
+    }
 
     return res
     .status(200)
@@ -378,10 +394,12 @@ const getChannelProfile = asyncHandler( async (req, res) => {
         throw new ApiError(400,"username is missing")
     }
 
+    const normalizedUsername = username.trim().toLowerCase();
+
     const channel = await User.aggregate([
         {
             $match: {
-                username: username?.toLowerCase()
+                username: normalizedUsername
             }
         },
         {
@@ -432,17 +450,14 @@ const getChannelProfile = asyncHandler( async (req, res) => {
         }
     ])
 
-    console.log(channel.length, channel);
-
     if (!channel?.length) {
         throw new ApiError(400, "channel does not exist")
     }
 
     return res
-    .status(200
+    .status(200)
     .json(
         new ApiResponse(200, channel[0], "Channel details fetched successfully")
-    )
     )
 })
 
